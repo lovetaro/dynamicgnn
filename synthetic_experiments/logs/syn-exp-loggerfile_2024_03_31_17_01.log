@@ -1,0 +1,11 @@
+2024-03-31 17:01:28: Graph 0 Run Summary - Test Mean: 0.8775 
+2024-03-31 17:01:34: Graph 1 Run Summary - Test Mean: 0.8575 
+2024-03-31 17:01:39: Graph 2 Run Summary - Test Mean: 0.8375 
+2024-03-31 17:01:45: Graph 3 Run Summary - Test Mean: 0.8400 
+2024-03-31 17:01:50: Graph 4 Run Summary - Test Mean: 0.8650 
+2024-03-31 17:01:56: Graph 5 Run Summary - Test Mean: 0.8475 
+2024-03-31 17:02:01: Graph 6 Run Summary - Test Mean: 0.8900 
+2024-03-31 17:02:07: Graph 7 Run Summary - Test Mean: 0.8675 
+2024-03-31 17:02:12: Graph 8 Run Summary - Test Mean: 0.8550 
+2024-03-31 17:02:18: Graph 9 Run Summary - Test Mean: 0.8725 
+2024-03-31 17:02:18: Best Result - Model type: acmgcn, Graph Type: random, Edge homo: 0.1, Base dataset: cora, Number of same edge: 800, Learning rate: 0.05, Weight decay: 0.0005, Dropout: 0.5, Test Mean: 0.8610, Test Mean: 0.0159 
