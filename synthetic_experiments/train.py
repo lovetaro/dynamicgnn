@@ -1,3 +1,21 @@
+''' usage example:
+        # 1. Train synthetic graph with linear GCN
+        python train.py --synthetic --model_type graffgcn \
+        --step_size 0.1 --num_layers 60 --normalize none --linear \
+        --base_dataset cora --graph_type random --edge_homo 0.1 --degree_intra 2 \
+        --num_graph 3 --lr 0.005 --weight_decay 0.0001 --dropout 0
+        
+        # 2. Train real graph with linear GCN
+        python train.py --model_type graffgcn \
+        --step_size 0.1 --num_layers 60 --normalize none --linear \
+        --base_dataset cora \
+        --num_graph 3 --lr 0.005 --weight_decay 0.0001 --dropout 0
+        
+        # NOTE: choice of datasets: ['cora', 'citeseer', 'pubmed',
+        #                            'cornell', 'texas', 'wisconsin',
+        #                            'film', 'chameleon', 'squirrel']
+'''
+
 from __future__ import division
 from __future__ import print_function
 
@@ -12,7 +30,7 @@ import torch.optim as optim
 from arg_parser import arg_parser
 from models import GRAFFNet, GCN
 from logger import SyntheticExpLogger
-from utils import accuracy, load_synthetic_data, normalize, random_disassortative_splits
+from utils import accuracy, load_synthetic_data, normalize, random_disassortative_splits, load_full_data
 
 logger = SyntheticExpLogger()
 
@@ -60,7 +78,17 @@ best_dropout = None
 best_weight_decay = None
 
 # Path 
-directory = f'ckpt/{args.model_type}/{args.base_dataset}/{args.edge_homo}'
+if not args.synthetic:
+    if args.linear:
+        directory = f'ckpt_real_graph_clean/{args.base_dataset}/{args.model_type}/linear/ss_{args.step_size}/nl_{args.num_layers}/norm_{args.normalize}'
+    else:
+        directory = f'ckpt_real_graph_clean/{args.base_dataset}/{args.model_type}/act_{args.activation}/ss_{args.step_size}/nl_{args.num_layers}/norm_{args.normalize}'
+else:
+    if args.linear: 
+        directory = f'ckpt_syn_graph_clean/{args.base_dataset}/{args.edge_homo}/{args.model_type}/linear/ss_{args.step_size}/nl_{args.num_layers}/norm_{args.normalize}'
+    else:
+        directory = f'ckpt_syn_graph_clean/{args.base_dataset}/{args.edge_homo}/{args.model_type}/act_{args.activation}/ss_{args.step_size}/nl_{args.num_layers}/norm_{args.normalize}'        
+
 path = os.path.join(os.curdir, directory) 
 if not os.path.exists(path):
     os.makedirs(path, exist_ok=True)  # Create directory and its parents if they don't exist
@@ -68,22 +96,25 @@ if not os.path.exists(path):
 result = np.zeros(args.num_graph)
 for sample in range(args.num_graph):
     run_info["graph_idx"] = sample
-
-    adj, labels, degree, features = load_synthetic_data(
-        args.graph_type, sample, args.edge_homo, args.base_dataset
-    )
-
-    nnodes = adj.shape[0]
-    adj_dense = adj
-    adj_dense[adj_dense != 0] = 1
-    adj_dense = adj_dense - torch.diag(torch.diag(adj_dense))
-    # print(adj_dense, adj_dense.sum(dim=1))
-
-    adj_low = torch.tensor(normalize(adj_dense + torch.eye(nnodes)))
     
-    adj_high = torch.eye(nnodes) - adj_low
-    adj_low = adj_low.to_sparse()
-    adj_high = adj_high.to_sparse()
+    if args.synthetic:
+        adj, labels, degree, features = load_synthetic_data(
+            args.graph_type, sample, args.edge_homo, args.base_dataset
+        )
+        nnodes = adj.shape[0]
+        adj_dense = adj
+        adj_dense[adj_dense != 0] = 1
+        adj_dense = adj_dense - torch.diag(torch.diag(adj_dense))
+        
+        adj_low = torch.tensor(normalize(adj_dense + torch.eye(nnodes)))        
+        adj_high = torch.eye(nnodes) - adj_low
+        adj_low = adj_low.to_sparse()
+        adj_high = adj_high.to_sparse()
+    else:
+        adj, _, features, labels = load_full_data(args.base_dataset)
+        adj_low = adj 
+        adj_high = adj_low      # NOT USED
+        adj_dense = adj_low     # NOT USED
 
     if args.cuda:
         features = features.cuda()
@@ -94,10 +125,7 @@ for sample in range(args.num_graph):
 
     def test():  # isolated_mask
         model.eval()
-        if args.model_type == "graff":
-            output = model(features, adj_low)
-        else:
-            output = model(features, adj_low, adj_high)
+        output = model(features, adj_low)
         output = F.log_softmax(output, dim=1)
         acc_test = accuracy(output[idx_test], labels[idx_test])
         return acc_test
@@ -107,21 +135,21 @@ for sample in range(args.num_graph):
         labels, labels.max() + 1
     )
 
-    if args.model_type == "graff":
+    if args.model_type in ["graff", "graffgcn"]:
         model = GRAFFNet(
             nfeat=features.shape[1],
             nhid=args.hidden,
             nclass=labels.max().item() + 1,
-            self_loops=True
+            self_loops=True, 
+            step_size = args.step_size,
+            model_type = args.model_type, 
+            linear = args.linear,
+            num_layers = args.num_layers,
+            activation=args.activation,
+            normalize=args.normalize
         )
     else:
-        model = GCN(
-            nfeat=features.shape[1],
-            nhid=args.hidden,
-            nclass=labels.max().item() + 1,
-            dropout=args.dropout,
-            model_type=args.model_type 
-        )
+        raise NotImplementedError
 
     if args.cuda:
         idx_train = idx_train.cuda()
@@ -144,10 +172,7 @@ for sample in range(args.num_graph):
         t = time.time()
         model.train()
         optimizer.zero_grad()
-        if args.model_type == "graff":
-            output = model(features, adj_low)
-        else:
-            output = model(features, adj_low, adj_high)
+        output = model(features, adj_low)
             
         output = F.log_softmax(output, dim=1)
         loss_train = F.nll_loss(output[idx_train], labels[idx_train])
@@ -156,13 +181,8 @@ for sample in range(args.num_graph):
         optimizer.step()
 
         if not args.fastmode:
-            # Evaluate validation set performance separately,
-            # deactivates dropout during validation run.
             model.eval()
-        if args.model_type == "graff":
-            output = model(features, adj_low)
-        else:
-            output = model(features, adj_low, adj_high)
+        output = model(features, adj_low)
 
         output = F.log_softmax(output, dim=1)
         val_loss = F.nll_loss(output[idx_val], labels[idx_val])
@@ -189,7 +209,7 @@ for sample in range(args.num_graph):
                 break
 
     best_epoch = best_ckpt['epoch']
-    torch.save(best_ckpt, os.path.join(path, f'graph_idx_{sample}_epoch_{best_epoch}.pt'))
+    torch.save(best_ckpt, os.path.join(path, f'run_idx_{sample}_epoch_{best_epoch}.pt'))
 
     run_info["result"] = best_test
     logger.log_run(run_info)
@@ -203,6 +223,6 @@ for sample in range(args.num_graph):
     if np.mean(result) > best_result:
         record_info["result"] = np.mean(result)
         record_info["std"] = np.std(result)
-        record_info["graph_idx"] = sample
+        record_info["run_idx"] = sample
 
 logger.log_record(model_info, record_info)

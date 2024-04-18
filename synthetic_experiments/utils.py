@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 import sys
+from torch_geometric.utils import get_laplacian, degree, to_edge_index
+import torch_sparse
 
 import networkx as nx
 import numpy as np
@@ -22,6 +24,17 @@ device = f"cuda:0" if torch.cuda.is_available() else "cpu"
 device = torch.device(device)
 sys.setrecursionlimit(99999)
 
+
+def dirichlet_energy(edge_index, n, X, edge_weight=None, norm_type=None):
+    edge_index, L = get_laplacian(edge_index, edge_weight, norm_type)
+    LX = torch_sparse.spmm(edge_index, L, n, n, X)
+    # return torch.sum(torch.trace(X.T @ de))
+    return (X * LX).sum()
+
+def rayleigh_quotient(edge_index, n, X, edge_weight=None):
+    energy = dirichlet_energy(edge_index, n, X, edge_weight, 'sym')
+    rayleigh = energy / torch.pow(torch.norm(X, p="fro"), 2)
+    return rayleigh
 
 def accuracy(output, labels):
     preds = output.max(1)[1].type_as(labels)
@@ -95,14 +108,14 @@ def load_data(dataset_str):
     names = ["x", "y", "tx", "ty", "allx", "ally", "graph"]
     objects = []
     for i in range(len(names)):
-        with open("../data/ind.{}.{}".format(dataset_str, names[i]), "rb") as f:
+        with open("../citation_dataset/ind.{}.{}".format(dataset_str, names[i]), "rb") as f:
             if sys.version_info > (3, 0):
                 objects.append(pkl.load(f, encoding="latin1"))
             else:
                 objects.append(pkl.load(f))
 
     x, y, tx, ty, allx, ally, graph = tuple(objects)
-    test_idx_reorder = parse_index_file("../data/ind.{}.test.index".format(dataset_str))
+    test_idx_reorder = parse_index_file("../citation_dataset/ind.{}.test.index".format(dataset_str))
     test_idx_range = np.sort(test_idx_reorder)
 
     if dataset_str == "citeseer":
@@ -145,10 +158,10 @@ def load_full_data(dataset_name):
 
     else:
         graph_adjacency_list_file_path = os.path.join(
-            "../new_data", dataset_name, "out1_graph_edges.txt"
+            "../hetero_ogb_dataset", dataset_name, "out1_graph_edges.txt"
         )
         graph_node_features_and_labels_file_path = os.path.join(
-            "../new_data", dataset_name, "out1_node_feature_label.txt"
+            "../hetero_ogb_dataset", dataset_name, "out1_node_feature_label.txt"
         )
 
         G = nx.DiGraph().to_undirected()

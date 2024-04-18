@@ -4,6 +4,9 @@ import argparse
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--synthetic", action="store_true", default=False, help="Synthetic experiment"
+    )
+    parser.add_argument(
         "--no-cuda", action="store_true", default=False, help="Disables CUDA training."
     )
     parser.add_argument(
@@ -16,17 +19,15 @@ def arg_parser():
         "--model_type",
         type=str,
         choices=[
-            "gcn",
-            "sgc",
-            "mlp",
-            "acmgcn",
-            "acmsgc",
-            "tcgnn",
-            "tgnn",
-            "graff"
+            "graff",
+            "graffgcn",
+            "graffgcnii",
         ],
         help="Indicate the GNN model to use",
-        default="mlp",
+        default="graffgcn",
+    )
+    parser.add_argument(
+        "--linear", action="store_true", default=False, help="linear layer in GRAFF"
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument(
@@ -42,8 +43,6 @@ def arg_parser():
     parser.add_argument(
         "--hidden", type=int, default=32, help="Number of hidden units."
     )
-    parser.add_argument("--use_lin", action="store_true", default=False,
-                        help="Add Low-order linear layer")
     parser.add_argument(
         "--base_dataset",
         type=str,
@@ -54,10 +53,12 @@ def arg_parser():
             "cora",
             "citeseer",
             "pubmed",
-            "random",
+            "texas",
+            "wisconsin",
+            "cornell",
         ],
         help="base dataset to generate dataset from",
-        default="chameleon",
+        default="cora",
     )
     parser.add_argument(
         "--graph_type",
@@ -95,6 +96,34 @@ def arg_parser():
         default=10,
         help="number of graphs to generate for each homophily level",
     )
+    parser.add_argument(
+        "--step_size",
+        type=float,
+        default=1.,
+        help="size of dt",
+    )
 
+    parser.add_argument(
+        "--num_layers",
+        type=int,
+        default=1,
+        help="number of layers",
+    )
+
+    parser.add_argument(
+        "--activation", type=str, default='tanh'
+    )
+
+    parser.add_argument(
+        "--normalize",
+        type=str,
+        choices=[
+            "batch",
+            "layer",
+            "none"
+        ],
+        help="Indicate the GNN model to use",
+        default="none",
+    )
     args = parser.parse_args()
     return args
