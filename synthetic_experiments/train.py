@@ -28,7 +28,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from arg_parser import arg_parser
-from models import GRAFFNet, GCN
+from models import GRAFFNet
 from logger import SyntheticExpLogger
 from utils import accuracy, load_synthetic_data, normalize, random_disassortative_splits, load_full_data
 
